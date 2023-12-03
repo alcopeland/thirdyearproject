@@ -1,17 +1,4 @@
 import torch
-class BooksDataset(torch.utils.data.Dataset):
-    def __init__(self, encodings, labels):
-        self.encodings = encodings
-        self.labels = labels
-
-    def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels[idx])
-        return item
-
-    def __len__(self):
-        return len(self.labels)
-
 def clean_text(text):
     from nltk.tokenize import word_tokenize
     tokenizedText = word_tokenize(text)
@@ -62,6 +49,14 @@ def read_booksdataset(texts, labels):
             texts.append(cleanText)
             labels.append([row[3]])
 
+def read_datasets():
+    texts = []
+    labels = []
+    print("reading datasets...")
+    read_booksummaries(texts, labels)
+    read_booksdataset(texts, labels)
+    return texts, labels  
+
 def write_to_csv(texts, labels):
     print("writing to csv...")
     combinedArray = list(zip(texts,labels))
@@ -70,14 +65,6 @@ def write_to_csv(texts, labels):
         writer = csv.writer(file)        
         writer.writerow(["text","label"])
         writer.writerows(combinedArray)
-
-def read_datasets():
-    texts = []
-    labels = []
-    print("reading datasets...")
-    read_booksummaries(texts, labels)
-    read_booksdataset(texts, labels)
-    return texts, labels  
 
 def train_bot():
     print("training model")    
@@ -94,7 +81,6 @@ def train_bot():
     print(type(splitDataset["train"]["label"][0]))
     # print(splitDataset["train"]["label"][0][0])
     # print(type(splitDataset["train"]["label"][0][0]))
-
 
     import torch
     from transformers import TrainingArguments, Trainer, GPT2LMHeadModel, GPT2Tokenizer
@@ -168,12 +154,34 @@ def generate_finetuned_response(query):
     text = tokenizer.decode(outputs[0], skip_special_tokens=True)
     print(text)
 
-def generate_default_response(query):
-    import torch
-    from transformers import GPT2LMHeadModel, GPT2Tokenizer
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
-    model = GPT2LMHeadModel.from_pretrained('gpt2-medium', pad_token_id = tokenizer.eos_token_id)
+# def calc_bert_scores(query, texts):
+#     from bert_score import BERTScorer
+#     scorer = BERTScorer(model_type='distilbert-base-uncased')
+#     results = []
+#     for line in texts:
+#         P, R, F1 = scorer.score([query], [line])
+#         results.append(F1.detach().numpy()[0])
+#     print(f"The best result is: {texts[results.index(max(results))]}")
 
+def calc_bert_scores(query, texts):
+    print("bert scores")
+    import numpy
+    queries = numpy.repeat(query,len(texts))
+    from bert_score import BERTScorer
+    scorer = BERTScorer(model_type='distilbert-base-uncased')
+    results = scorer.score(queries, texts)
+    results2 = [tup[1].detach().numpy()[0] for tup in results]
+
+    # results = list(map(calc_bert_score, texts, queries.tolist()))
+    print(results2[0:4])
+
+def calc_bert_score(texts, queries):
+    from bert_score import BERTScorer
+    scorer = BERTScorer(model_type='distilbert-base-uncased')
+    P, R, F1 = scorer.score(queries, texts)
+    return 
+
+def generate_default_response(query, model, tokenizer):
     inputs = tokenizer.encode(query, return_tensors='pt')
     outputs = model.generate(inputs,
         max_length=200,
@@ -193,24 +201,31 @@ def main(arg1,arg2=None):
     if arg1=="1":
         if arg2=="1":
             texts, labels = read_datasets()
-            uniqueLabels = unique_labels_list(labels)
-            indexLabels = convert_labels(labels, uniqueLabels)
-            write_to_csv(texts,indexLabels)
-            train_bot()
+            #uniqueLabels = unique_labels_list(labels)
+            #indexLabels = convert_labels(labels, uniqueLabels)
+            #write_to_csv(texts,indexLabels)
+            query = input()
+            top10 = calc_bert_scores(query,texts[0:100])
+
+            #train_bot()
         # while True:
         #     query = input()
         #     if query in exit_list: break
         #     generate_finetuned_response(query)
         # print("Exiting...")
     elif arg1=="0":
-        print("System ready. Please enter your query: ")
+        import torch
+        from transformers import GPT2LMHeadModel, GPT2Tokenizer
+        tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
+        model = GPT2LMHeadModel.from_pretrained('gpt2-medium', pad_token_id = tokenizer.eos_token_id)
         convHistory = ""
+        
+        print("System ready. Please enter your query: ")
         while True:
             query = input()
             if query in exit_list: break
-            generate_default_response(convHistory +" "+ query)
+            generate_default_response(convHistory+" "+query, model, tokenizer)
             convHistory = convHistory +" "+ clean_text(query)
-            print(convHistory)
         print("Exiting...")
             
 
