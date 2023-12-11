@@ -139,18 +139,6 @@ def make_summary(input_summary, max_length):
     summary_ids = model.generate(inputs, max_length=max_length, min_length=20, length_penalty=5., num_beams=2)
     return tokenizer.decode(summary_ids[0])
 
-def summarize_summary(input_summaries):
-    print("making summaries...")
-    first = True
-    output_summaries = []
-    for summary in input_summaries:
-        if first:
-            output_summaries.append(make_summary(summary, 250))
-            first=False
-        else:
-            output_summaries.append(make_summary(summary, 150))
-    return output_summaries
-
 def clean_summaries(input_summaries):
     import re
     pad = re.compile(r'<pad> ')
@@ -161,10 +149,24 @@ def clean_summaries(input_summaries):
         summary = re.sub(pad,'',summary)
         summary = re.sub(s,'',summary)
         sentences = sent_tokenize(summary)
-        sentences = [sent.title() for sent in sentences]
+        sentences = [sent.capitalize() for sent in sentences]
         summary = ' '.join(sentences)
         clean_summaries.append(summary)
     return clean_summaries
+
+def summarize_summary(input_summaries):
+    print("making summaries...")
+    input_summaries.reverse()
+    first = True
+    output_summaries = []
+    for summary in input_summaries:
+        if first:
+            output_summaries.append(make_summary(summary, 250))
+            first=False
+        else:
+            output_summaries.append(make_summary(summary, 150))
+    output_summaries = clean_summaries(output_summaries)
+    return output_summaries
 
 def main():
     print("System starting...")
@@ -184,10 +186,8 @@ def main():
     top_10_names = list(np.array(refined_dataset["train"]["name"])[top_10_index])
     top_10_names.reverse()
 
-    top_10_summaries_long = list(np.array(refined_dataset["train"]["original"])[top_10_index])
-    top_10_summaries_long.reverse()
-    top_10_summaries_short = summarize_summary(top_10_summaries_long)
-    top_10_summaries_short = clean_summaries(top_10_summaries_short)
+    top_10_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_10_index]))
+    #top_10_summaries_short = clean_summaries(top_10_summaries_short)
 
     results = tuple(zip(top_10_names, top_10_summaries_short))
     print("\n\nHere are some similar books you might like: ")
