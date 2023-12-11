@@ -39,9 +39,10 @@ def read_booksummaries(names, labels, texts):
                 names.append(nameSplit[0])
                 labels.append(label)
                 texts.append(cleanText)
+                #TODO append original text here
                 #print(f"{nameSplit[0]} / {label} / {cleanText}")
 
-def read_booksdataset(names, labels, texts):
+def read_booksdataset(names, labels, texts, original_texts):
     print("reading booksdataset...")
     import csv
     with open("BooksDataSet.csv", "r", encoding="utf-8", errors="ignore") as file:
@@ -50,23 +51,24 @@ def read_booksdataset(names, labels, texts):
         for row in csv_reader:
             names.append(row[2])
             cleanText = clean_text(row[4])
-            texts.append(f"{row[2]} {row[3]} {cleanText}")
             labels.append(row[3]) # put square brackets around to make into list for multiclass classification
-    return names, labels, texts
+            texts.append(f"{row[2]} {row[3]} {cleanText}")
+            original_texts.append(row[4])
+    return names, labels, texts, original_texts
 
 def read_datasets():
     print("reading datasets...")
-    names, labels, texts = read_booksdataset([],[],[])
+    names, labels, texts, original_texts = read_booksdataset([],[],[],[])
     #read_booksummaries(names, labels, texts)
-    return names, labels, texts  
+    return names, labels, texts  , original_texts
 
-def write_to_csv(names, labels, texts):
+def write_to_csv(names, labels, texts, original_texts):
     print("writing to csv...")
-    combinedArray = list(zip(names,labels,texts))
+    combinedArray = list(zip(names,labels,texts,original_texts))
     import csv
     with open('final_text.csv', 'w+', encoding="utf-8", errors="ignore", newline='') as file:
         writer = csv.writer(file)        
-        writer.writerow(["name","label","text"])
+        writer.writerow(["name","label","text","original"])
         writer.writerows(combinedArray)    
 
 def load_dataset_from_csv():
@@ -91,7 +93,7 @@ def train_naive_bayes(dataset):
     predicted_labels = model.predict(dataset["test"]["text"])
 
     #print(predicted_labels)
-    print(accuracy_score(dataset["test"]["label"], predicted_labels))
+    #print(accuracy_score(dataset["test"]["label"], predicted_labels))
     return model
 
 def predict_user_input(model):
@@ -102,11 +104,9 @@ def predict_user_input(model):
 
 def limit_dataset(prediction, dataset):
     print("limiting dataset...")
-    print(prediction)
+    #print(prediction)
     refined_dataset = dataset.filter(lambda record: record["label"]==prediction)
-    #print(refined_dataset["train"]["label"])
-    print(refined_dataset["train"]["name"])
-    #print(len(refined_dataset["train"]["name"]))
+    #print(refined_dataset["train"]["name"])
     return refined_dataset
 
 def calculate_bert_score(query, summary):
@@ -126,23 +126,75 @@ def calculate_bert_scores(query, dataset):
     print(top_10_index)
     return top_10_index, scores
 
+def make_summary(input_summary, max_length):
+    # https://www.turing.com/kb/5-powerful-text-summarization-techniques-in-python 
+    import torch
+    from transformers import AutoTokenizer, AutoModelWithLMHead
+    tokenizer = AutoTokenizer.from_pretrained('t5-base', model_max_length=512)
+    model = AutoModelWithLMHead.from_pretrained('t5-base', return_dict=True)
+    inputs = tokenizer.encode("summarize: " + input_summary,
+        return_tensors='pt',
+        max_length=512,
+        truncation=True)
+    summary_ids = model.generate(inputs, max_length=max_length, min_length=20, length_penalty=5., num_beams=2)
+    return tokenizer.decode(summary_ids[0])
+
+def summarize_summary(input_summaries):
+    print("making summaries...")
+    first = True
+    output_summaries = []
+    for summary in input_summaries:
+        if first:
+            output_summaries.append(make_summary(summary, 250))
+            first=False
+        else:
+            output_summaries.append(make_summary(summary, 150))
+    return output_summaries
+
+def clean_summaries(input_summaries):
+    import re
+    pad = re.compile(r'<pad> ')
+    s = re.compile(r'</s>')
+    clean_summaries = []
+    from nltk import sent_tokenize
+    for summary in input_summaries:
+        summary = re.sub(pad,'',summary)
+        summary = re.sub(s,'',summary)
+        sentences = sent_tokenize(summary)
+        sentences = [sent.title() for sent in sentences]
+        summary = ' '.join(sentences)
+        clean_summaries.append(summary)
+    return clean_summaries
+
 def main():
     print("System starting...")
     import sys
     if len(sys.argv)>1:
-        names, labels, texts = read_datasets()
-        write_to_csv(names, labels, texts)
+        names, labels, texts, original_texts = read_datasets()
+        write_to_csv(names, labels, texts, original_texts)
+
     dataset = load_dataset_from_csv()
     model = train_naive_bayes(dataset)
     query, prediction = predict_user_input(model)
     refined_dataset = limit_dataset(prediction, dataset)
+
     top_10_index, all_scores = calculate_bert_scores(query, refined_dataset)
+    #top_10_index = [1,2,3,4,5,6,7,8,9,10]
     import numpy as np
     top_10_names = list(np.array(refined_dataset["train"]["name"])[top_10_index])
     top_10_names.reverse()
-    print("Here are some similar books you might like: ")
-    for name in top_10_names:
-        print(f"- {name}")
+
+    top_10_summaries_long = list(np.array(refined_dataset["train"]["original"])[top_10_index])
+    top_10_summaries_long.reverse()
+    top_10_summaries_short = summarize_summary(top_10_summaries_long)
+    top_10_summaries_short = clean_summaries(top_10_summaries_short)
+
+    results = tuple(zip(top_10_names, top_10_summaries_short))
+    print("\n\nHere are some similar books you might like: ")
+    for result in results:
+        print(f" -- {result[0]}")
+        print(f"{result[1]}")
+        print("\n")
 
 if __name__ == "__main__":
     main()
