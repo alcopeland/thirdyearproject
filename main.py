@@ -100,6 +100,7 @@ def predict_user_input(model):
     print("Please enter a sentence: ")
     query = input()
     prediction = model.predict([query])
+    # print(prediction)
     return query, prediction[0]
 
 def limit_dataset(prediction, dataset):
@@ -109,63 +110,71 @@ def limit_dataset(prediction, dataset):
     #print(refined_dataset["train"]["name"])
     return refined_dataset
 
-def calculate_bert_score(query, summary):
-    from bert_score import BERTScorer
-    scorer = BERTScorer(model_type='distilbert-base-uncased')
+def calculate_bert_score(summary, scorer, query):
     P, R, F1  = scorer.score([query], [summary])
     return F1.detach().numpy()[0]
 
 def calculate_bert_scores(query, dataset):
     print("calculating bert scores...")
+    from bert_score import BERTScorer
+    scorer = BERTScorer(model_type='distilbert-base-uncased')
+    scores = []
+    import time
+    start = time.time()
+
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
+        future_scores = [executor.submit(calculate_bert_score, summary, scorer, query) for summary in dataset['train']['text']]
+        for score in future_scores:
+            scores.append(score.result())
+
+    end = time.time()
+    # print(scores)
+    print(f'Took {end-start} seconds')
     import numpy as np
-    queries = np.repeat(query,len(dataset["train"]["text"]))
-    scores = map(calculate_bert_score, queries, dataset["train"]["text"])
-    scores = list(scores)
-    print(scores)
     top_10_index = np.argsort(scores)[-10:]
-    print(top_10_index)
     return top_10_index, scores
 
-def make_summary(input_summary, max_length):
+def make_summary(input_summary, summarizer):
+    print("summarizing...")
     # https://www.turing.com/kb/5-powerful-text-summarization-techniques-in-python 
-    import torch
-    from transformers import AutoTokenizer, AutoModelWithLMHead
-    tokenizer = AutoTokenizer.from_pretrained('t5-base', model_max_length=512)
-    model = AutoModelWithLMHead.from_pretrained('t5-base', return_dict=True)
-    inputs = tokenizer.encode("summarize: " + input_summary,
-        return_tensors='pt',
-        max_length=512,
-        truncation=True)
-    summary_ids = model.generate(inputs, max_length=max_length, min_length=20, length_penalty=5., num_beams=2)
-    return tokenizer.decode(summary_ids[0])
+    # from transformers import AutoTokenizer, AutoModelWithLMHead
+    # from transformers import T5ForConditionalGeneration, T5Tokenizer
 
-def clean_summaries(input_summaries):
-    import re
-    pad = re.compile(r'<pad> ')
-    s = re.compile(r'</s>')
-    clean_summaries = []
-    from nltk import sent_tokenize
-    for summary in input_summaries:
-        summary = re.sub(pad,'',summary)
-        summary = re.sub(s,'',summary)
-        sentences = sent_tokenize(summary)
-        sentences = [sent.capitalize() for sent in sentences]
-        summary = ' '.join(sentences)
-        clean_summaries.append(summary)
-    return clean_summaries
-
+    # https://thepythoncode.com/article/text-summarization-using-huggingface-transformers-python
+    import math
+    max = min(math.floor(len(input_summary)), 130)
+    text = summarizer(input_summary,
+                        min_length=16,
+                        max_length=max,
+                        no_repeat_ngram_size=3,
+                        encoder_no_repeat_ngram_size=3,
+                        repetition_penalty=3.5,
+                        num_beams=4,
+                        early_stopping=True,
+                      )[0]['summary_text']
+    return text
+    
 def summarize_summary(input_summaries):
     print("making summaries...")
     input_summaries.reverse()
-    first = True
     output_summaries = []
-    for summary in input_summaries:
-        if first:
-            output_summaries.append(make_summary(summary, 250))
-            first=False
-        else:
-            output_summaries.append(make_summary(summary, 150))
-    output_summaries = clean_summaries(output_summaries)
+    
+    from transformers import pipeline
+    # model_id = 'Falconsai/text_summarization'
+    model_id = 'pszemraj/led-large-book-summary'
+    # model_id = 'facebook/bart-large-cnn'
+    # model_id = 'pszemraj/long-t5-tglobal-base-16384-book-summary'
+    summarizer = pipeline('summarization', model=model_id)
+    
+    import time
+    start = time.time()
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_scores = [executor.submit(make_summary, summary, summarizer) for summary in input_summaries]
+        for score in future_scores:
+            output_summaries.append(score.result())
+    print(f'Took {time.time()-start} seconds')
     return output_summaries
 
 def main():
@@ -187,12 +196,11 @@ def main():
     top_10_names.reverse()
 
     top_10_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_10_index]))
-    #top_10_summaries_short = clean_summaries(top_10_summaries_short)
 
     results = tuple(zip(top_10_names, top_10_summaries_short))
     print("\n\nHere are some similar books you might like: ")
     for result in results:
-        print(f" -- {result[0]}")
+        print(f" -- {result[0]} -- ")
         print(f"{result[1]}")
         print("\n")
 
