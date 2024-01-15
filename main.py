@@ -87,12 +87,10 @@ def train_naive_bayes(dataset):
     #print(accuracy_score(dataset["test"]["label"], predicted_labels))
     return model
 
-def predict_user_input(model):
-    print("Please enter a sentence: ")
-    query = input()
+def predict_user_input(model, query):
     prediction = model.predict([query])
     # print(prediction)
-    return query, prediction[0]
+    return prediction[0]
 
 def limit_dataset(prediction, dataset):
     refined_dataset = dataset.filter(lambda record: record["label"]==prediction)
@@ -149,19 +147,26 @@ def summarize_summary(input_summaries):
     # print(f'Took {time.time()-start} seconds')
     return output_summaries
 
-def main():
-    print("System starting...")
-    import sys
-    if len(sys.argv)>1:
-        names, labels, texts, original_texts = read_datasets()
-        write_to_csv(names, labels, texts, original_texts)
+def get_user_query():
+    # https://stackoverflow.com/questions/56836865/how-to-use-nlp-in-python-to-analyze-questions-from-a-chat-conversation
+    # use intent/entity extraction to ask some guided questions
+    print("Please enter a sentence: ")
+    query = input()
+    return query
 
-    dataset = load_dataset_from_csv()
-    model = train_naive_bayes(dataset)
-    query, prediction = predict_user_input(model)
+def print_results(results):
+    print("\n\nHere are some similar books you might like: ")
+    for result in results:
+        print(f" -- {result[0]} -- ")
+        print(f"{result[1]}")
+        print("\n")
+
+def general_book_request(model, dataset):
+    user_query = get_user_query()
+    prediction = predict_user_input(model, user_query)
     refined_dataset = limit_dataset(prediction, dataset)
 
-    top_10_index, all_scores = calculate_bert_scores(query, refined_dataset)
+    top_10_index, all_scores = calculate_bert_scores(user_query, refined_dataset)
     import numpy as np
     top_10_names = list(np.array(refined_dataset["train"]["name"])[top_10_index])
     top_10_names.reverse()
@@ -169,11 +174,23 @@ def main():
     top_10_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_10_index]))
 
     results = tuple(zip(top_10_names, top_10_summaries_short))
-    print("\n\nHere are some similar books you might like: ")
-    for result in results:
-        print(f" -- {result[0]} -- ")
-        print(f"{result[1]}")
-        print("\n")
+    print_results(results)
 
+def system_setup():
+    import sys
+    if len(sys.argv)>1:
+        names, labels, texts, original_texts = read_datasets()
+        write_to_csv(names, labels, texts, original_texts)
+
+    dataset = load_dataset_from_csv()
+    model = train_naive_bayes(dataset)
+    return model, dataset
+
+def main():
+    print("System starting...")
+    model, dataset = system_setup()
+    # use intent to run different tasks e.g. general book request
+    general_book_request(model, dataset)
+    
 if __name__ == "__main__":
     main()
