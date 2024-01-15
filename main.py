@@ -12,7 +12,6 @@ def clean_text(text):
     return cleanTextS
 
 def read_booksummaries(names, labels, texts):
-    print("reading booksummaries...")
     import re
     with open("datasets/uncompressed/booksummaries.txt", "r", encoding="utf-8") as file:
         sep1 = re.compile(r'"/m/\w{4,7}":')
@@ -43,7 +42,6 @@ def read_booksummaries(names, labels, texts):
                 #print(f"{nameSplit[0]} / {label} / {cleanText}")
 
 def read_booksdataset(names, labels, texts, original_texts):
-    print("reading booksdataset...")
     import csv
     with open("BooksDataSet.csv", "r", encoding="utf-8", errors="ignore") as file:
         csv_reader = csv.reader(file)
@@ -57,13 +55,11 @@ def read_booksdataset(names, labels, texts, original_texts):
     return names, labels, texts, original_texts
 
 def read_datasets():
-    print("reading datasets...")
     names, labels, texts, original_texts = read_booksdataset([],[],[],[])
     #read_booksummaries(names, labels, texts)
     return names, labels, texts  , original_texts
 
 def write_to_csv(names, labels, texts, original_texts):
-    print("writing to csv...")
     combinedArray = list(zip(names,labels,texts,original_texts))
     import csv
     with open('final_text.csv', 'w+', encoding="utf-8", errors="ignore", newline='') as file:
@@ -72,16 +68,13 @@ def write_to_csv(names, labels, texts, original_texts):
         writer.writerows(combinedArray)    
 
 def load_dataset_from_csv():
-    print("loading dataset...")
     # https://medium.com/@lokaregns/fine-tuning-transformers-with-custom-dataset-classification-task-f261579ae068 
     from datasets import load_dataset
     dataset = load_dataset('csv', data_files = 'final_text.csv')
-    #dataset = dataset.class_encode_column("label")
     dataset = dataset['train'].train_test_split(test_size=0.2)
     return dataset
 
 def train_naive_bayes(dataset):
-    print("training classifier...")
     # https://www.turing.com/kb/document-classification-using-naive-bayes
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.naive_bayes import MultinomialNB
@@ -91,8 +84,6 @@ def train_naive_bayes(dataset):
     model = make_pipeline(TfidfVectorizer(), MultinomialNB())
     model.fit(dataset["train"]["text"],dataset["train"]["label"])
     predicted_labels = model.predict(dataset["test"]["text"])
-
-    #print(predicted_labels)
     #print(accuracy_score(dataset["test"]["label"], predicted_labels))
     return model
 
@@ -104,10 +95,7 @@ def predict_user_input(model):
     return query, prediction[0]
 
 def limit_dataset(prediction, dataset):
-    print("limiting dataset...")
-    #print(prediction)
     refined_dataset = dataset.filter(lambda record: record["label"]==prediction)
-    #print(refined_dataset["train"]["name"])
     return refined_dataset
 
 def calculate_bert_score(summary, scorer, query):
@@ -115,66 +103,50 @@ def calculate_bert_score(summary, scorer, query):
     return F1.detach().numpy()[0]
 
 def calculate_bert_scores(query, dataset):
-    print("calculating bert scores...")
     from bert_score import BERTScorer
     scorer = BERTScorer(model_type='distilbert-base-uncased')
     scores = []
-    import time
-    start = time.time()
 
+    # import time
+    # start = time.time()
     import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=60) as executor:
         future_scores = [executor.submit(calculate_bert_score, summary, scorer, query) for summary in dataset['train']['text']]
         for score in future_scores:
             scores.append(score.result())
-
-    end = time.time()
-    # print(scores)
-    print(f'Took {end-start} seconds')
+    # print(f'Took {time.time()-start} seconds')
     import numpy as np
     top_10_index = np.argsort(scores)[-10:]
     return top_10_index, scores
 
 def make_summary(input_summary, summarizer):
-    print("summarizing...")
     # https://www.turing.com/kb/5-powerful-text-summarization-techniques-in-python 
     # from transformers import AutoTokenizer, AutoModelWithLMHead
     # from transformers import T5ForConditionalGeneration, T5Tokenizer
 
     # https://thepythoncode.com/article/text-summarization-using-huggingface-transformers-python
-    import math
-    max = min(math.floor(len(input_summary)), 130)
-    text = summarizer(input_summary,
-                        min_length=16,
-                        max_length=max,
-                        no_repeat_ngram_size=3,
-                        encoder_no_repeat_ngram_size=3,
-                        repetition_penalty=3.5,
-                        num_beams=4,
-                        early_stopping=True,
-                      )[0]['summary_text']
+    text = summarizer(input_summary[:1024], max_length=115, min_length=85, do_sample=False)[0]['summary_text']
     return text
     
 def summarize_summary(input_summaries):
-    print("making summaries...")
     input_summaries.reverse()
     output_summaries = []
     
     from transformers import pipeline
     # model_id = 'Falconsai/text_summarization'
-    model_id = 'pszemraj/led-large-book-summary'
-    # model_id = 'facebook/bart-large-cnn'
+    # model_id = 'pszemraj/led-large-book-summary'
     # model_id = 'pszemraj/long-t5-tglobal-base-16384-book-summary'
+    model_id = 'facebook/bart-large-cnn'
     summarizer = pipeline('summarization', model=model_id)
     
-    import time
-    start = time.time()
+    # import time
+    # start = time.time()
     import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
         future_scores = [executor.submit(make_summary, summary, summarizer) for summary in input_summaries]
         for score in future_scores:
             output_summaries.append(score.result())
-    print(f'Took {time.time()-start} seconds')
+    # print(f'Took {time.time()-start} seconds')
     return output_summaries
 
 def main():
@@ -190,7 +162,6 @@ def main():
     refined_dataset = limit_dataset(prediction, dataset)
 
     top_10_index, all_scores = calculate_bert_scores(query, refined_dataset)
-    #top_10_index = [1,2,3,4,5,6,7,8,9,10]
     import numpy as np
     top_10_names = list(np.array(refined_dataset["train"]["name"])[top_10_index])
     top_10_names.reverse()
