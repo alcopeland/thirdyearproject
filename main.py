@@ -11,36 +11,6 @@ def clean_text(text):
     cleanTextS = ' '.join(cleanText)
     return cleanTextS
 
-def read_booksummaries(names, labels, texts):
-    import re
-    with open("datasets/uncompressed/booksummaries.txt", "r", encoding="utf-8") as file:
-        sep1 = re.compile(r'"/m/\w{4,7}":')
-        sep2 = re.compile(r'"/m/\w{4,7}"')
-        sep3 = re.compile(r'/m/\w{4,7}')
-        sep4 = re.compile(r'=====')
-        for line in file.readlines():
-            newLine = re.sub(sep1,'',line)
-            newLine = re.sub(sep2,'',newLine)
-            newLine = re.sub(sep3,'',newLine)
-            newLine = re.sub(sep4,'',newLine)
-            split = newLine.split("{")
-            noNumber = split[0].split("\t\t")
-            nameSplit = noNumber[1].split("\t")
-            
-            if(len(split)>1):
-                genreSplit = split[1].split("}")
-                text = ' '.join((noNumber[1] + genreSplit[1]).split())
-                cleanText = clean_text(text)
-                label = re.sub('"','',genreSplit[0])
-                label = label.split(",  ")
-                label[0] = label[0][1:]
-
-                names.append(nameSplit[0])
-                labels.append(label)
-                texts.append(cleanText)
-                #TODO append original text here
-                #print(f"{nameSplit[0]} / {label} / {cleanText}")
-
 def read_booksdataset(names, labels, texts, original_texts):
     import csv
     with open("BooksDataSet.csv", "r", encoding="utf-8", errors="ignore") as file:
@@ -56,7 +26,6 @@ def read_booksdataset(names, labels, texts, original_texts):
 
 def read_datasets():
     names, labels, texts, original_texts = read_booksdataset([],[],[],[])
-    #read_booksummaries(names, labels, texts)
     return names, labels, texts  , original_texts
 
 def write_to_csv(names, labels, texts, original_texts):
@@ -127,7 +96,7 @@ def make_summary(input_summary, summarizer):
     return text
     
 def summarize_summary(input_summaries):
-    input_summaries.reverse()
+    #input_summaries.reverse()
     output_summaries = []
     
     from transformers import pipeline
@@ -147,34 +116,42 @@ def summarize_summary(input_summaries):
     # print(f'Took {time.time()-start} seconds')
     return output_summaries
 
-def get_user_query():
-    # https://stackoverflow.com/questions/56836865/how-to-use-nlp-in-python-to-analyze-questions-from-a-chat-conversation
-    # use intent/entity extraction to ask some guided questions
-    print("Please enter a sentence: ")
-    query = input()
-    return query
+def print_results(results, intent):
+    match intent:
+        case 'general_request':
+            print("\n\nHere are some similar books you might like: ")
+            for result in results:
+                print(f" -- {result[0]} -- ")
+                print(f"{result[1]}")
+                print("\n")
+        case 'author_request_1':
+            print("Here are some results that might match authors mentioned: ")
+            for result in results:
+                print(f" -- {result[0]} -- ")
+                print(f"Average rating: {result[2]} from {result[3]} reviews")
+                print(f"{result[1]}")
+                print("\n")
+        case 'author_request_2':
+            print("Here are some more results: ")
+            for result in results:
+                print(f" -- {result[0]} -- ")
+                print(f"Average rating: {result[2]} from {result[3]} reviews")
+                print(f"{result[1]}")
+                print("\n")
 
-def print_results(results):
-    print("\n\nHere are some similar books you might like: ")
-    for result in results:
-        print(f" -- {result[0]} -- ")
-        print(f"{result[1]}")
-        print("\n")
-
-def general_book_request(model, dataset):
-    user_query = get_user_query()
+def query_book_request(model, dataset, user_query):
     prediction = predict_user_input(model, user_query)
     refined_dataset = limit_dataset(prediction, dataset)
 
     top_10_index, all_scores = calculate_bert_scores(user_query, refined_dataset)
     import numpy as np
     top_10_names = list(np.array(refined_dataset["train"]["name"])[top_10_index])
-    top_10_names.reverse()
+    #top_10_names.reverse()
 
     top_10_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_10_index]))
 
     results = tuple(zip(top_10_names, top_10_summaries_short))
-    print_results(results)
+    print_results(results,'general_request')
 
 def system_setup():
     import sys
@@ -186,11 +163,226 @@ def system_setup():
     model = train_naive_bayes(dataset)
     return model, dataset
 
+def user_intent(initial_query):
+    X = [
+        'I am looking for a good book to read.',
+        'What is a good book to read?',
+        "hey, I'm looking for a new book to read, any suggestions?",
+        'Give me recommendations for books to read.',
+        'What are some popular books I might not have read?',
+        'I am looking for a good book to read, nothing specific.',
+        'What are some must-read books?',
+        'Book recommendations for teens / young adults.',
+        "I'm looking for some good fantasy books, any recommendations?",
+        'What are some good action books?',
+        'I am really into science fiction books, do you know any books I might like?',
+        'I enjoy reading thrillers, do you know any books I might like?',
+        'Do you know any good crime fiction or thriller books?',
+        'Please can you list some good books to read?',
+        'List some epic fantasy books, please.',
+        'Got any good fantasy/sci-fi books?',
+        'What are some books like Harry Potter?',
+        'Books similar to Game of Thrones',
+        'What books are like Airborne?',
+        'Books set in space.',
+        'Adventure books.',
+        'Books similar to Star Wars.',
+        'What books are linked to the Harry Potter series?',
+        'What books are in the Game of Thrones series?',
+        'What are some highly rated books?',
+        'List books in the Mistborn series',
+        'What are some other books written by George Martin?',
+        'Books by J. R. R. Tolkien',
+        'Other books by Tolkien',
+        'List books written by Brandon Sanderson',
+        'I like Orwell novels, any suggestions?',
+        'More books by stephen king',
+        'Similar books by Roald Dahl',
+        'If i like books written by JRR Tolkien, what else might I enjoy?',
+        'What books are written by Agatha Christie?',
+        'What are some good spy novels?',
+        'tell me similar books to Stormlight Archive',
+        'I would like a book recommendation',
+        'list any books that Frank Herbert composed',
+        'What books did Kenneth Oppel write',
+        'novels written by Stuart Hill',
+        'books that JK Rowling wrote',
+        'books in the Dune set',
+        'What books have Frank Herbert made?'
+    ]
+    y = [
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'genre_request',
+        'genre_request',
+        'genre_request',
+        'genre_request',
+        'genre_request',
+        'general_request',
+        'genre_request',
+        'genre_request',
+        'book_request',
+        'book_request',
+        'book_request',
+        'genre_request',
+        'genre_request',
+        'book_request',
+        'book_request',
+        'book_request',
+        'general_request',
+        'book_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'genre_request',
+        'book_request',
+        'general_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'book_request',
+        'author_request'
+    ]
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import SGDClassifier
+    from sklearn.pipeline import Pipeline
+    clf = Pipeline([('tfidf', TfidfVectorizer()),('sgd', SGDClassifier())])
+    clf.fit(X, y)
+    predict_intent = clf.predict([initial_query])
+    return predict_intent
+
+def get_initial_query():
+    # https://stackoverflow.com/questions/56836865/how-to-use-nlp-in-python-to-analyze-questions-from-a-chat-conversation
+    # use intent/entity extraction to ask some guided questions
+    print("How can I help you today?")
+    initial_query = input()
+    intent = user_intent(initial_query)
+    return initial_query, intent
+
+def get_author(query):
+    import spacy
+    import string
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(query)
+    author_aliases = []
+    for word in doc:
+        if word.pos_=='PROPN':
+            author_aliases.append(word.text.lower().translate(str.maketrans('', '', string.punctuation)))
+    for entity in doc.ents:
+            author_aliases.append(entity.text.lower().translate(str.maketrans('', '', string.punctuation)))
+    import nltk
+    from nltk import ne_chunk, pos_tag, word_tokenize
+    from nltk.tree import Tree
+    nltk_results = ne_chunk(pos_tag(word_tokenize(query)))
+    for nltk_result in nltk_results:
+        if type(nltk_result) == Tree:
+            name = ''
+            for nltk_result_leaf in nltk_result.leaves():
+                name += nltk_result_leaf[0] + ' '
+            author_aliases.append(name.lower().translate(str.maketrans('', '', string.punctuation)))
+    return  list(set(author_aliases))
+
+def find_authors_in_dataset(authors):
+    results = []
+    import csv
+    import string
+    with open('goodreads_data.csv', encoding="utf-8") as file:
+        reader = csv.reader(file, delimiter=',')
+        for row in reader:
+            if any(name in row[1].lower() for name in authors):
+                results.append([row[0], row[1].lower().translate(str.maketrans('', '', string.punctuation)), row[2], row[4], int(row[5].replace(",","")),0])
+    import spacy
+    from math import sqrt
+    nlp = spacy.load('en_core_web_sm')
+    authors_vectors = []
+    for author in authors:
+        authors_vectors.append(nlp(author))
+    for result in results:
+        result_vector = nlp(result[1])
+        scores = []
+        for author_vector in authors_vectors:
+            numerator = sum(a*b for a,b in zip(author_vector.vector,result_vector.vector))
+            denominator = sqrt(sum([a*a for a in author_vector.vector]))*sqrt(sum([a*a for a in result_vector.vector]))
+            scores.append(numerator/float(denominator))
+        result[5] = max(scores)
+    sorted_authors = sorted(results, key=lambda x:x[5], reverse=True)
+    filtered_results = [a for a in sorted_authors if a[5]==sorted_authors[0][5]]
+    sorted_results = sorted(filtered_results, key=lambda x:x[4], reverse=True)
+    return sorted_results
+
+def yes_or_no():
+    # https://stackoverflow.com/questions/62156781/how-do-i-get-a-list-of-all-combinations-for-both-words-given
+    query = input()
+    yes_words = ['yes','okay','yeah','y','ye','yep','sure','ok','cool','please','yes please','certainly','with pleasure']
+    no_words = ['no','nope','n','no thanks','no thank you','nay','nah','no way','not']
+    X = []
+    y = []
+    for word in yes_words:
+        X+=[word,word.upper(),word.capitalize()]
+        y+=['yes','yes','yes']
+    for word in no_words:
+        X+=[word,word.upper(),word.capitalize()]
+        y+=['no','no','no']
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import SGDClassifier
+    from sklearn.pipeline import Pipeline
+    clf = Pipeline([('tfidf', TfidfVectorizer()),('sgd', SGDClassifier())])
+    clf.fit(X, y)
+    predict_intent = clf.predict([query])
+    if predict_intent == 'yes':
+        return True
+    else:
+        return False
+
 def main():
     print("System starting...")
     model, dataset = system_setup()
-    # use intent to run different tasks e.g. general book request
-    general_book_request(model, dataset)
+    initial_query, intent = get_initial_query()
+    print(intent)
+    match intent:
+        case 'author_request': 
+            authors = get_author(initial_query)
+            results = find_authors_in_dataset(authors)
+            summaries = [a[2] for a in results]
+            new_summaries = summarize_summary(summaries)
+            final_results = tuple(zip([a[0] for a in results], new_summaries, [a[3] for a in results], [a[4] for a in results]))
+            print_results(final_results[:5],'author_request_1')
+            if len(final_results)>5:
+                print("Would you like to see more?")
+                if yes_or_no():
+                    print_results(final_results[6:],'author_request_2')
+            print("Would you like to find some similar books?")
+            if yes_or_no():
+                print("more")
+                # ask if they want similar books
+                # if yes run general
     
+        case 'general_request': 
+            print("in")
+            query = input()
+            query_book_request(model, dataset, query)
+        # ask fixed questions to get info about what books they like
+        # run general lookup based on query
+    
+    # If book
+        # get book name from user input
+        # search larger dataset for other books in series
+
+    # If genre
+        #  run general?
+
 if __name__ == "__main__":
     main()
