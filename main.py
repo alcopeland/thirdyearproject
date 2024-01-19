@@ -92,7 +92,7 @@ def make_summary(input_summary, summarizer):
     # from transformers import T5ForConditionalGeneration, T5Tokenizer
 
     # https://thepythoncode.com/article/text-summarization-using-huggingface-transformers-python
-    text = summarizer(input_summary[:1024], max_length=115, min_length=85, do_sample=False)[0]['summary_text']
+    text = summarizer(input_summary[:1024], max_length=100, min_length=65, do_sample=False)[0]['summary_text']
     return text
     
 def summarize_summary(input_summaries):
@@ -119,39 +119,60 @@ def summarize_summary(input_summaries):
 def print_results(results, intent):
     match intent:
         case 'general_request':
-            print("\n\nHere are some similar books you might like: ")
+            print("\n\nHere are some similar books you might like: \n")
             for result in results:
                 print(f" -- {result[0]} -- ")
                 print(f"{result[1]}")
                 print("\n")
         case 'author_request_1':
-            print("Here are some results that might match authors mentioned: ")
+            print("\n\nHere are some results that might match authors mentioned: \n")
             for result in results:
                 print(f" -- {result[0]} -- ")
                 print(f"Average rating: {result[2]} from {result[3]} reviews")
                 print(f"{result[1]}")
                 print("\n")
         case 'author_request_2':
-            print("Here are some more results: ")
+            print("\n\nHere are some more results: \n")
             for result in results:
                 print(f" -- {result[0]} -- ")
                 print(f"Average rating: {result[2]} from {result[3]} reviews")
-                print(f"{result[1]}")
+                print("\n")
+        case 'genre_request_1':
+            print("\n\nHere are some resutls for the genres mentioned: \n")
+            for result in results:
+                genres = ((str(result[3]).replace("[","")).replace("]","")).replace("'","")
+                print(f" -- {result[0]} by {result[1]} -- ")
+                print(f"Average rating: {result[4]} from {result[5]} reviews")
+                print(f"Genres: {genres}")
+                print(f"{result[2]}")
+                print("\n")
+        case 'genre_request_2':
+            print("\n\nHere are more resutls: \n")
+            for result in results:
+                genres = ((str(result[3]).replace("[","")).replace("]","")).replace("'","")
+                print(f" -- {result[0]} by {result[1]} -- ")
+                print(f"Average rating: {result[4]} from {result[5]} reviews")
+                print(f"Genres: {genres}")
                 print("\n")
 
 def query_book_request(model, dataset, user_query):
     prediction = predict_user_input(model, user_query)
     refined_dataset = limit_dataset(prediction, dataset)
-
-    top_10_index, all_scores = calculate_bert_scores(user_query, refined_dataset)
     import numpy as np
-    top_10_names = list(np.array(refined_dataset["train"]["name"])[top_10_index])
-    #top_10_names.reverse()
-
-    top_10_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_10_index]))
-
-    results = tuple(zip(top_10_names, top_10_summaries_short))
+    top_10_index, all_scores = calculate_bert_scores(user_query, refined_dataset)
+    top_5_index = top_10_index[:5]
+    top_5_names = list(np.array(refined_dataset["train"]["name"])[top_5_index])
+    top_5_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_5_index]))
+    results = tuple(zip(top_5_names, top_5_summaries_short))
     print_results(results,'general_request')
+
+    print("Would you like to see more results?")
+    if yes_or_no():
+        bottom_5_index = top_10_index[6:]
+        bottom_5_names = list(np.array(refined_dataset["train"]["name"])[bottom_5_index])
+        bottom_5_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[bottom_5_index]))
+        results = tuple(zip(bottom_5_names, bottom_5_summaries_short))
+        print_results(results,'general_request')
 
 def system_setup():
     import sys
@@ -264,10 +285,11 @@ def user_intent(initial_query):
     predict_intent = clf.predict([initial_query])
     return predict_intent
 
-def get_initial_query():
+def get_initial_query(first):
     # https://stackoverflow.com/questions/56836865/how-to-use-nlp-in-python-to-analyze-questions-from-a-chat-conversation
     # use intent/entity extraction to ask some guided questions
-    print("How can I help you today?")
+    if first: print("How can I help you today?")
+    else: print("Tell me about a genre, author or book series you enjoy.")
     initial_query = input()
     intent = user_intent(initial_query)
     return initial_query, intent
@@ -301,6 +323,7 @@ def find_authors_in_dataset(authors):
     import string
     with open('goodreads_data.csv', encoding="utf-8") as file:
         reader = csv.reader(file, delimiter=',')
+        next(file)
         for row in reader:
             if any(name in row[1].lower() for name in authors):
                 results.append([row[0], row[1].lower().translate(str.maketrans('', '', string.punctuation)), row[2], row[4], int(row[5].replace(",","")),0])
@@ -319,9 +342,12 @@ def find_authors_in_dataset(authors):
             scores.append(numerator/float(denominator))
         result[5] = max(scores)
     sorted_authors = sorted(results, key=lambda x:x[5], reverse=True)
-    filtered_results = [a for a in sorted_authors if a[5]==sorted_authors[0][5]]
-    sorted_results = sorted(filtered_results, key=lambda x:x[4], reverse=True)
-    return sorted_results
+    if sorted_authors[0][5] > 0.65:
+        filtered_results = [a for a in sorted_authors if a[5]==sorted_authors[0][5]]
+        sorted_results = sorted(filtered_results, key=lambda x:x[4], reverse=True)
+        return sorted_results
+    else:
+        return []
 
 def yes_or_no():
     # https://stackoverflow.com/questions/62156781/how-do-i-get-a-list-of-all-combinations-for-both-words-given
@@ -347,42 +373,133 @@ def yes_or_no():
     else:
         return False
 
+def get_book_keywords(query):
+    import spacy
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(query)
+    keywords = []
+    for word in doc:
+        print(f"{word.text} {word.pos_}")
+        if word.pos_ == 'PROPN':
+            keywords.append(word.text)
+        if word.pos_ == 'NOUN':
+            keywords.append(word.text)
+    from nltk import ne_chunk, pos_tag, word_tokenize
+    from nltk.tree import Tree
+    nltk_results = ne_chunk(pos_tag(word_tokenize(query)))
+    for nltk_result in nltk_results:
+        if type(nltk_result) == Tree:
+            name = ''
+            for nltk_result_leaf in nltk_result.leaves():
+                name += nltk_result_leaf[0] + ' '
+            keywords.append(name)
+    return list(set(keywords))
+
+def get_genre_keywords(query):
+    import spacy
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(query)
+    keywords = []
+    for word in doc:
+        #print(f"{word.text} {word.pos_}")
+        if word.pos_ == 'PROPN':
+            keywords.append(word.text.capitalize())
+        if word.pos_ == 'NOUN':
+            keywords.append(word.text.capitalize())
+        if word.pos_ == 'ADJ':
+            keywords.append(word.text.capitalize())
+    from nltk.stem import PorterStemmer
+    stemmer = PorterStemmer()
+    stems = []
+    for word in keywords:
+        stems.append(stemmer.stem(word).capitalize())
+    return list(set(keywords+stems))
+
+def find_genres_in_dataset(genre_keywords):
+    results = []
+    import csv
+    with open('goodreads_data.csv', encoding="utf-8") as file:
+        reader = csv.reader(file, delimiter=',')
+        next(file)
+        for row in reader:
+            if int(row[5].replace(",","")) > 1000:
+                if any(name in row[3] for name in genre_keywords):
+                    results.append([row[0], row[1], row[2], row[3], row[4], int(row[5].replace(",",""))])
+    sorted_results = sorted(results, key=lambda x:x[5], reverse=True)
+    return sorted_results[:20]
+
 def main():
     print("System starting...")
     model, dataset = system_setup()
-    initial_query, intent = get_initial_query()
-    print(intent)
-    match intent:
-        case 'author_request': 
-            authors = get_author(initial_query)
-            results = find_authors_in_dataset(authors)
-            summaries = [a[2] for a in results]
-            new_summaries = summarize_summary(summaries)
-            final_results = tuple(zip([a[0] for a in results], new_summaries, [a[3] for a in results], [a[4] for a in results]))
-            print_results(final_results[:5],'author_request_1')
-            if len(final_results)>5:
-                print("Would you like to see more?")
-                if yes_or_no():
-                    print_results(final_results[6:],'author_request_2')
-            print("Would you like to find some similar books?")
-            if yes_or_no():
-                print("more")
-                # ask if they want similar books
-                # if yes run general
-    
-        case 'general_request': 
+    loop = True
+    first = True
+    while loop:
+        initial_query, intent = get_initial_query(first)
+        print(intent)
+        if intent=='general_request':
             print("in")
             query = input()
             query_book_request(model, dataset, query)
-        # ask fixed questions to get info about what books they like
-        # run general lookup based on query
-    
-    # If book
-        # get book name from user input
-        # search larger dataset for other books in series
 
-    # If genre
-        #  run general?
+            # ask fixed questions to get info about what books they like
+            # run general lookup based on query
+        match intent:
+            case 'author_request': 
+                authors = get_author(initial_query)
+                results = find_authors_in_dataset(authors)
+                summaries = [a[2] for a in results]
+                if len(summaries)!=0:
+                    new_summaries = summarize_summary(summaries[:5])
+                    final_results = tuple(zip([a[0] for a in results], new_summaries+(['']*(len(summaries)-5)), [a[3] for a in results], [a[4] for a in results]))
+                    
+                    print_results(final_results[:5],'author_request_1')
+                    if len(final_results)>5:
+                        print("Would you like to see more?")
+                        if yes_or_no():
+                            print_results(final_results[6:],'author_request_2')
+                    print("Would you like to find some similar books?")
+                    if yes_or_no():
+                        clean_summaries = []
+                        for summary in summaries:
+                            clean_summaries.append(clean_text(summary))
+                        query = ''.join(clean_summaries)
+                        query_book_request(model, dataset, query)
+                else:
+                    print("Sorry, I was unable to find any books by that author.")
+
+            case 'book_request':
+                book_keywords = get_book_keywords(initial_query)
+                print(book_keywords)
+            # If book
+                # works similar to author search
+                # get book name from user input
+                # search larger dataset for other books in series
+            case 'genre_request':
+                genre_keywords = get_genre_keywords(initial_query)
+                results = find_genres_in_dataset(genre_keywords)
+                summaries = [a[2] for a in results]
+                if len(summaries)!=0:
+                    new_summaries = summarize_summary(summaries[:5])
+                    final_results = tuple(zip([a[0] for a in results], [a[1] for a in results], new_summaries+(['']*(len(summaries)-5)), [a[3] for a in results], [a[4] for a in results], [a[5] for a in results]))
+                    
+                    print_results(final_results[:5],'genre_request_1')
+                    if len(final_results)>5:
+                        print("Would you like to see more?")
+                        if yes_or_no():
+                            print_results(final_results[6:],'genre_request_2')
+                    print("Would you like to find some similar books?")
+                    if yes_or_no():
+                        clean_summaries = []
+                        for summary in summaries:
+                            clean_summaries.append(clean_text(summary))
+                        query = ''.join(clean_summaries)
+                        query_book_request(model, dataset, query)
+                else:
+                    print("Sorry, I was unable to find any books in that genre.")
+        print("Would you like to continue?")
+        if yes_or_no(): first = False
+        else: loop = False
+    print("Goodbye.")
 
 if __name__ == "__main__":
     main()
