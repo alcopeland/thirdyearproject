@@ -395,7 +395,7 @@ def get_book_keywords(query):
     for entity in doc.ents:
         keywords.append(entity.text)
     if not keywords:
-        print("Sorry, I didn't quite catch the series name. Please enter the series name again.")
+        print("Sorry, I didn't quite that. Please enter the book/series name again.")
         keywords.append(input())
     return list(set(keywords))
 
@@ -445,7 +445,8 @@ def find_books_in_dataset(book_keywords):
         for row in reader:
             if any(book in row[0].lower() for book in lower_book_keywords):
                 results.append([row[0], row[1], row[2], row[3], row[4], int(row[5].replace(",",""))])
-    return results
+    sorted_results = sorted(results, key=lambda x:x[5], reverse=True)
+    return sorted_results
 
 def main():
     print("System starting...")
@@ -553,12 +554,8 @@ def main():
                             else: query_book_request(model, dataset, new_query)
 
                         full_query = full_query + " " + new_query
-                    else: print("I couldn't find any books in this series.")
-                else: print("Sorry, I failed to determine the series you wanted.")
-            # If book
-                # works similar to author search
-                # get book name from user input
-                # search larger dataset for other books in series
+                    else: print("I couldn't find any books by that name.")
+                else: print("Sorry, I failed to determine the book/series you wanted.")
 
             case 'genre_request':
                 genre_keywords = get_genre_keywords(initial_query)
