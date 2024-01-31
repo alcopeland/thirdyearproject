@@ -25,3 +25,21 @@ def summarize_summary(input_summaries):
             output_summaries.append(score.result())
     # print(f'Making summaries took {time.time()-start} seconds')
     return output_summaries
+
+def get_response(context):
+    # https://thepythoncode.com/article/paraphrase-text-using-transformers-in-python
+    # https://huggingface.co/blog/how-to-generate
+    # https://huggingface.co/tuner007/pegasus_paraphrase
+    import torch
+    import random
+    from transformers import PegasusForConditionalGeneration, PegasusTokenizer
+    model_name = 'tuner007/pegasus_paraphrase'
+    tokenizer = PegasusTokenizer.from_pretrained(model_name)
+    model = PegasusForConditionalGeneration.from_pretrained(model_name)
+    num_beams, num_return_sequences = 10, 5
+
+    batch = tokenizer([context], truncation=True, padding='longest', max_length=15, return_tensors="pt")
+    translated = model.generate(**batch, max_length=15, num_beams=num_beams, num_return_sequences=num_return_sequences, temperature=2.25, do_sample=True, early_stopping=True, top_p=0.92, top_k=15)
+    responses = tokenizer.batch_decode(translated, skip_special_tokens=True)
+    rand = random.randint(0, 4)
+    return responses[rand]

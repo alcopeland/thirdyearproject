@@ -5,7 +5,7 @@ def query_book_request(model, dataset, user_query):
     top_10_index, all_scores = calculate_bert_scores(user_query, refined_dataset)
     top_5_index = top_10_index[:5]
     top_5_names = list(np.array(refined_dataset["train"]["name"])[top_5_index])
-    from make_summaries import summarize_summary
+    from text_generation import summarize_summary
     top_5_summaries_short = summarize_summary(list(np.array(refined_dataset["train"]["original"])[top_5_index]))
     results = tuple(zip(top_5_names, top_5_summaries_short))
     from output_results import print_results

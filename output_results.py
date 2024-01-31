@@ -1,6 +1,6 @@
 def output_results(results, first, model, dataset, full_query):
     summaries = [a[2] for a in results]
-    from make_summaries import summarize_summary
+    from text_generation import summarize_summary
     new_summaries = summarize_summary(summaries[:5])
     final_results = tuple(zip([a[0] for a in results], [a[1] for a in results], new_summaries+(['']*(len(summaries)-5)), [a[3] for a in results], [a[4] for a in results], [a[5] for a in results]))
     
