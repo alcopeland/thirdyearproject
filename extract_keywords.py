@@ -30,8 +30,10 @@ def extract_book_keywords(query):
     for entity in doc.ents:
         keywords.append(entity.text)
     if not keywords:
-        print("Sorry, I didn't quite that. Please enter the book/series name again.")
-        keywords.append(input())
+        from text_generation import get_response
+        print(get_response("Please re-enter the name of the book/series again."))
+        answer = input()
+        keywords.append([answer.lower(), answer.capitalize()])
     fail_safe = []
     for name in keywords:
         if "the" in name:

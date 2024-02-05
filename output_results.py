@@ -16,27 +16,29 @@ def output_results(results, first, model, dataset, full_query):
     new_query += extract_summary_keywords(summaries)
     full_query = full_query + " " + new_query
     
-    print("Would you like to find some similar books?")
+    from text_generation import get_response
+    print(get_response("Would you be interested finding some similar results?"))
     from user_intent import yes_or_no
     if yes_or_no(): 
         from find_similar_books import query_book_request
         if not first:
-            print("Would you like to use your previous searches in this search?")
+            print(get_response("Would you like to use your previous searches in this search?"))
             if yes_or_no(): query_book_request(model, dataset, full_query)
             else: query_book_request(model, dataset, new_query)
         else: query_book_request(model, dataset, new_query)
     return full_query
 
 def print_results(results, intent):
+    from text_generation import get_response
     match intent:
         case '0':
-            print("\n\nHere are some similar books you might like: \n")
+            print("\n\n"+ get_response("Here are some books I think you might enjoy") + "\n")
             for result in results:
                 print(f" -- {result[0]} -- ")
                 print(f"{result[1]}")
                 print("\n")
         case '1':
-            print("\n\nHere are some resutls for you: \n")
+            print("\n\n"+ get_response("Here are some books I think you might enjoy") + "\n")
             for result in results:
                 genres = ((str(result[3]).replace("[","")).replace("]","")).replace("'","")
                 print(f" -- {result[0]} by {result[1]} -- ")

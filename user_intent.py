@@ -1,6 +1,7 @@
 def get_initial_query(first):
-    if first: print("Greetings! How can I help you today?")
-    else: print("How else can I assist you today?")
+    from text_generation import get_response
+    if first: print("Hello! " + get_response("How can I be of assistance for you today?"))
+    else: print(get_response("Can I help you with anything else today?"))
     initial_query = input()
     intent = user_intent(initial_query)
     return initial_query, intent

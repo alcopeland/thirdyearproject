@@ -15,8 +15,7 @@ def main():
         print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
         parser=PlaintextParser.from_string(summary,Tokenizer("english"))
         summarizer = LexRankSummarizer()
-        result1 = summarizer(parser.document,1)
-        print(result1[0])
+        result1 = summarizer(parser.document,2)
         sentences = []
         for sentence in result1:
             sentences.append(str(sentence))

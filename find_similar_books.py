@@ -12,7 +12,8 @@ def query_book_request(model, dataset, user_query):
     print_results(results,'0')
 
     from user_intent import yes_or_no
-    print("Would you like to see more results?")
+    from text_generation import get_response
+    print(get_response("Would you like to see more results for this search?"))
     if yes_or_no():
         bottom_5_index = top_10_index[5:]
         bottom_5_names = list(np.array(refined_dataset["train"]["name"])[bottom_5_index])
@@ -29,14 +30,14 @@ def calculate_bert_scores(query, dataset):
     scorer = BERTScorer(model_type='distilbert-base-uncased')
     scores = []
 
-    import time
-    start = time.time()
+    # import time
+    # start = time.time()
     import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_scores = [executor.submit(calculate_bert_score, summary, scorer, query) for summary in dataset['train']['text']]
         for score in future_scores:
             scores.append(score.result())
-    print(f'Calculating BERT Scores took {time.time()-start} seconds')
+    # print(f'Calculating BERT Scores took {time.time()-start} seconds')
     import numpy as np
     top_10_index = np.argsort(scores)[-10:]
     return top_10_index, scores
