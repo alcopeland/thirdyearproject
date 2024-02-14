@@ -40,6 +40,6 @@ def system_setup():
         names, labels, texts, original_texts = read_booksdataset()
         write_to_csv(names, labels, texts, original_texts)
     from train_classifier import load_dataset_from_csv, train_naive_bayes
-    full_dataset, split_dataset = load_dataset_from_csv()
+    full_dataset, split_dataset = load_dataset_from_csv(size=0.2)
     model = train_naive_bayes(split_dataset)
     return model, full_dataset
