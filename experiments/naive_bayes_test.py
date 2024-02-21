@@ -1,6 +1,10 @@
-def test(sample,size):
+from cbrs.train_classifier import load_dataset_from_csv, test_naive_bayes
+import concurrent.futures
+
+# A short program I created to test the accuracy of the Naive Bayes calssifier over multiple tests, using multiple test-train split values
+
+def test(sample: list, size: int) -> float:
     print(f"Starting {sample}...")
-    from train_classifier import load_dataset_from_csv, test_naive_bayes
     scores = []
     dataset = load_dataset_from_csv(size=sample)[1]
     for i in range(1,size,1):
@@ -11,7 +15,6 @@ def main():
     size = 10
     sample = [0.05,0.1,0.15,0.2,0.25,0.3]
     scores = []
-    import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(sample), 10)) as executor:
         future_scores = [executor.submit(test, s, size) for s in sample]
         for score in future_scores:

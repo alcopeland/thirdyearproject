@@ -1,13 +1,25 @@
-def get_initial_query(first):
-    from text_generation import get_response
+from numpy import ndarray
+from text_generation import get_response
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import SGDClassifier
+from sklearn.pipeline import Pipeline
+
+def get_initial_query(first: bool) -> tuple[str, ndarray]:
+    # If first is True, print a welcome and offer assistance
     if first: print("Hello! " + get_response("How can I be of assistance for you today?"))
+    # Else, offer further assistance
     else: print(get_response("What further assistance am I able to offer you with today?"))
+    # Take user input and determine the intent of it
     initial_query = input()
     intent = user_intent(initial_query)
     return initial_query, intent
 
-def user_intent(initial_query):
+def user_intent(initial_query: str) -> ndarray:
+    # Method found at link below
     # https://stackoverflow.com/questions/56836865/how-to-use-nlp-in-python-to-analyze-questions-from-a-chat-conversation
+    # Used human-annotated example sentences with intent to train a classifier
+    # Initalise a list of example sentences
     X = [
         'I am looking for a good book to read.',
         'What is a good book to read?',
@@ -67,8 +79,11 @@ def user_intent(initial_query):
         'close',
         'done',
         'finished',
-        'end'
+        'end',
+        'leave',
+        'stop'
     ]
+    # Initalise a list of labels to refer to the example sentences
     y = [
         'general_request',
         'general_request',
@@ -128,36 +143,43 @@ def user_intent(initial_query):
         'exit',
         'exit',
         'exit',
+        'exit',
+        'exit',
         'exit'
     ]
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.linear_model import SGDClassifier
-    from sklearn.pipeline import Pipeline
+    # Create a Pipeline to vectorise sentences using TF-IDF and then train a classifier using SGD on that data
     clf = Pipeline([('tfidf', TfidfVectorizer()),('sgd', SGDClassifier())])
+    # Fit the data to a model using the pipeline
     clf.fit(X, y)
+    # Predict the intent of the user input provided using the model created
     predict_intent = clf.predict([initial_query])
     return predict_intent
 
-def yes_or_no():
+def yes_or_no() -> bool:
+    # Method found at link below
     # https://stackoverflow.com/questions/62156781/how-do-i-get-a-list-of-all-combinations-for-both-words-given
+    # Take user input
     query = input()
+    # List of different words meaning yes or no in a list
     yes_words = ['yes','okay','yeah','y','ye','yep','sure','ok','cool','please','yes please','certainly','with pleasure']
     no_words = ['no','nope','n','no thanks','no thank you','nay','nah','no way','not']
     X = []
     y = []
+    # Add yes words in upper, lower and capitalised case to X and matching labels to Y
     for word in yes_words:
         X+=[word,word.upper(),word.capitalize()]
         y+=['yes','yes','yes']
+    # Add no words in upper, lower and capitalised case to X and matching labels to Y
     for word in no_words:
         X+=[word,word.upper(),word.capitalize()]
         y+=['no','no','no']
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.linear_model import SGDClassifier
-    from sklearn.pipeline import Pipeline
+    # Create a Pipeline to vectorise sentences using TF-IDF and then train a classifier using SGD on that data
     clf = Pipeline([('tfidf', TfidfVectorizer()),('sgd', SGDClassifier())])
+    # Fit the data to a model using the pipeline
     clf.fit(X, y)
+    # Predict the intent of the user input provided using the model created
     predict_intent = clf.predict([query])
-    if predict_intent == 'yes':
-        return True
-    else:
-        return False
+    # Return True if intent is yes
+    if predict_intent == 'yes': return True
+    # Else return False
+    else: return False

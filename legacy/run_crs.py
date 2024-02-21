@@ -1,3 +1,6 @@
+# An old appraoch to my project which I scrapped as I wanted to do it differently
+
+
 import torch
 def clean_text(text):
     from nltk.tokenize import word_tokenize

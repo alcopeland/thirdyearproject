@@ -1,3 +1,6 @@
+# An old version of my project before I split the code into separate files
+
+
 def clean_text(text):
     from nltk.tokenize import word_tokenize
     tokenizedText = word_tokenize(text)
