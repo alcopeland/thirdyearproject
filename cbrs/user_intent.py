@@ -81,7 +81,26 @@ def user_intent(initial_query: str) -> ndarray:
         'finished',
         'end',
         'leave',
-        'stop'
+        'stop',
+        'complete',
+        'no',
+        'fulfilled',
+        'I want new books like Alex Rider',
+        'What are some books matching A Court of Thorns and Roses',
+        'Give me some books akin to The Girl with the Dragon Tattoo',
+        'What are books with similar themes to Dragonflight',
+        'books like flame in the mist',
+        'books like those written by Veronica Roth',
+        "Similar books to Sarah J. Maas's",
+        "I enjoy Anne McCaffrey's books, what eles is there?",
+        "Vera Nazarian's writing is great, who else might I like?",
+        "please find more books akin to Alexander McCall Smith's",
+        "Who wrote The Pillars of the Earth?",
+        'give me some good books',
+        'I want to find a new book to read',
+        'Want some help finding a book',
+        'Can you assist me in choosing a new book?',
+        'What are some popular books?'
     ]
     # Initalise a list of labels to refer to the example sentences
     y = [
@@ -145,7 +164,26 @@ def user_intent(initial_query: str) -> ndarray:
         'exit',
         'exit',
         'exit',
-        'exit'
+        'exit',
+        'exit',
+        'exit',
+        'exit',
+        'book_request',
+        'book_request',
+        'book_request',
+        'book_request',
+        'book_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'author_request',
+        'book_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request',
+        'general_request'
     ]
     # Create a Pipeline to vectorise sentences using TF-IDF and then train a classifier using SGD on that data
     clf = Pipeline([('tfidf', TfidfVectorizer()),('sgd', SGDClassifier())])

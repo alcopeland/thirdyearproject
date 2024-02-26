@@ -106,7 +106,7 @@ def extract_summary_keywords(texts: list) -> str:
 def extract_single_keywords(text: str, model: KeyBERT) -> str:
     # Takes a single string and extracts the top 20 keywords, and top 5 n-gram phrases and stoes them all in a string
     keywords = model.extract_keywords(text, keyphrase_ngram_range=(1, 1), stop_words='english', highlight=False, top_n=20)
-    keyphrases = model.extract_keywords(text, keyphrase_ngram_range=(1, 2), stop_words='english', highlight=False, top_n=5)
+    keyphrases = model.extract_keywords(text, keyphrase_ngram_range=(2, 2), stop_words='english', highlight=False, top_n=5)
     keywords = keywords + keyphrases
     keywords = ' '.join(list(dict(keywords).keys()))
     return keywords
